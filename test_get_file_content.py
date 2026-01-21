@@ -7,7 +7,6 @@ from functions.get_file_content import get_file_content
 class TestGetFileContent(unittest.TestCase):
     def test_truncation_message_added(self):
         result = get_file_content("calculator", "lorem.txt")
-        print("!!!!result:", result)
 
         self.assertGreater(len(result), MAX_CHARS)
         self.assertTrue(
