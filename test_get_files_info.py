@@ -41,7 +41,7 @@ class TestGetFilesInfo(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(exit=False)
 
     print(get_files_info("calculator", "."))
     print(get_files_info("calculator", "pkg"))
