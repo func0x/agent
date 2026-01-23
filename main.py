@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 
 from dotenv import load_dotenv
 from google import genai
@@ -34,35 +35,57 @@ def main():
         )
     ]
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
-        contents=messages,
-        config=types.GenerateContentConfig(
-            system_instruction=system_prompt,
-            temperature=0,
-            tools=[
-                types.Tool(
-                    function_declarations=[
-                        schema_get_files_info,
-                        schema_get_file_content,
-                        schema_run_python_file,
-                        schema_write_file,
-                    ]
-                )
-            ],
-        ),
-    )
+    prompt_tokens = 0
+    response_tokens = 0
 
-    prompt_tokens = (
-        response.usage_metadata.prompt_token_count if response.usage_metadata else 0
-    )
-    response_tokens = (
-        response.usage_metadata.candidates_token_count if response.usage_metadata else 0
-    )
+    for _ in range(20):
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=messages,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0,
+                tools=[
+                    types.Tool(
+                        function_declarations=[
+                            schema_get_files_info,
+                            schema_get_file_content,
+                            schema_run_python_file,
+                            schema_write_file,
+                        ]
+                    )
+                ],
+            ),
+        )
 
-    function_results = []
+        prompt_tokens += (
+            response.usage_metadata.prompt_token_count
+            if response.usage_metadata and response.usage_metadata.prompt_token_count
+            else 0
+        )
+        response_tokens += (
+            response.usage_metadata.candidates_token_count
+            if response.usage_metadata
+            and response.usage_metadata.candidates_token_count
+            else 0
+        )
 
-    if response.function_calls:
+        if response.candidates:
+            for candidate in response.candidates:
+                if candidate.content:
+                    messages.append(candidate.content)
+
+        if not response.function_calls:
+            if args.verbose:
+                print(f"User prompt: {args.user_prompt}")
+                print(f"Prompt tokens: {prompt_tokens}")
+                print(f"Response tokens: {response_tokens}")
+            print("Response:")
+            print(response.text)
+            return
+
+        function_results = []
+
         for function_call in response.function_calls:
             function_call_result = call_function(function_call, verbose=args.verbose)
 
@@ -85,13 +108,10 @@ def main():
             if args.verbose:
                 print(f"-> {part.function_response.response}")
 
-    if args.verbose:
-        print(f"User prompt: {args.user_prompt}")
-        print(f"Prompt tokens: {prompt_tokens}")
-        print(f"Response tokens: {response_tokens}")
+        messages.append(types.Content(role="user", parts=function_results))
 
-    print("Response:")
-    print(response.text)
+    print("Error: Maximum number of iterations (20) reached without a final response.")
+    sys.exit(1)
 
 
 if __name__ == "__main__":
